@@ -287,7 +287,7 @@
   // Helper to fetch file from URL and convert to File object
   async function fetchFileToFileObject(url, filename, mimeType) {
     const response = await fetch(url);
-    if (!response.ok) throw new Error(\`Failed to fetch file: \${filename}\`);
+    if (!response.ok) throw new Error(`Failed to fetch file: ${filename}`);
     const blob = await response.blob();
     return new File([blob], filename, { type: mimeType });
   }
@@ -301,11 +301,11 @@
     try {
       const basePath = 'files/';
 
-      const questionFileName = 'Formatted Questions_.doc';
-      const choicesFileName = 'Multiple Choices_.doc';
-      const answersFileName = 'Answer Key_.doc';
+      const questionFileName = 'Formatted Questions_.docx';
+      const choicesFileName = 'Multiple Choices_.docx';
+      const answersFileName = 'Answer Key_.docx';
 
-      const docMimeType = 'application/msword';
+      const docMimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
       const questionFile = await fetchFileToFileObject(basePath + encodeURIComponent(questionFileName), questionFileName, docMimeType);
       const choicesFile = await fetchFileToFileObject(basePath + encodeURIComponent(choicesFileName), choicesFileName, docMimeType);
@@ -426,133 +426,24 @@
 
       questions = [];
       for (let [num, qText] of questionsMap) {
-        if (!choicesMap.has(num)) throw new Error(\`Choices missing for question number \${num}\`);
-        if (!answersMap.has(num)) throw new Error(\`Answer missing for question number \${num}\`);
+        if (!choicesMap.has(num)) throw new Error(`Choices missing for question number ${num}`);
+        if (!answersMap.has(num)) throw new Error(`Answer missing for question number ${num}`);
         const opts = choicesMap.get(num);
-        if (!Array.isArray(opts)) throw new Error(\`Choices for question \${num} must be an array.\`);
+        if (!Array.isArray(opts)) throw new Error(`Choices for question ${num} must be an array.`);
         const ansRaw = answersMap.get(num);
 
         let answerIndex = null;
         if (/^\d+$/.test(ansRaw)) {
           const idx = parseInt(ansRaw, 10);
-          if (idx < 0 || idx >= opts.length) throw new Error(\`Answer index out of range for question \${num}\`);
+          if (idx < 0 || idx >= opts.length) throw new Error(`Answer index out of range for question ${num}`);
           answerIndex = idx;
         } else if (/^[A-Za-z]$/.test(ansRaw)) {
           const idx = ansRaw.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
-          if (idx < 0 || idx >= opts.length) throw new Error(\`Answer letter out of range for question \${num}\`);
+          if (idx < 0 || idx >= opts.length) throw new Error(`Answer letter out of range for question ${num}`);
           answerIndex = idx;
         } else {
-          throw new Error(\`Unsupported answer format for question \${num}: "\${ansRaw}"\`);
+          throw new Error(`Unsupported answer format for question ${num}: "${ansRaw}"`);
         }
 
         questions.push({
-          question: qText,
-          options: opts,
-          answerIndex: answerIndex
-        });
-      }
-
-      if (questions.length === 0) throw new Error('No questions prepared after processing.');
-
-      materialStatus.textContent = \`Processed and prepared \${questions.length} questions.\`;
-      log(\`Processed \${questions.length} questions.\`);
-      shuffleBtn.disabled = false;
-      updatePrepareBtnState();
-    } catch (e) {
-      questions = [];
-      materialStatus.textContent = 'Error processing files.';
-      log('Error: ' + e.message);
-      alert('Failed to process files: ' + e.message);
-      shuffleBtn.disabled = true;
-      prepareTestBtn.disabled = true;
-    } finally {
-      processFilesBtn.disabled = false;
-    }
-  }
-
-  async function extractTextFromPDF(file) {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let fullText = '';
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items.map(item => item.str).join(' ');
-      fullText += pageText + '\\n';
-    }
-    return fullText;
-  }
-
-  async function extractTextFromDocx(file) {
-    return await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = function (event) {
-        mammoth.extractRawText({ arrayBuffer: event.target.result })
-          .then((result) => {
-            resolve(result.value);
-          })
-          .catch((err) => reject(new Error('Mammoth parsing error: ' + err.message)));
-      };
-      reader.onerror = () => reject(new Error('Failed to read file ' + file.name));
-      reader.readAsArrayBuffer(file);
-    });
-  }
-
-  async function extractTextFromFile(file) {
-    const fileName = file.name.toLowerCase();
-    if (fileName.endsWith('.pdf')) {
-      return await extractTextFromPDF(file);
-    } else if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) {
-      return await extractTextFromDocx(file);
-    } else if (fileName.endsWith('.json')) {
-      const text = await file.text();
-      return text;
-    } else {
-      throw new Error('Unsupported file type for ' + file.name);
-    }
-  }
-
-  function parseNumberedList(text) {
-    const lines = text.split(/\\r?\\n/);
-    const map = new Map();
-    for (let line of lines) {
-      const match = line.match(/^\\s*(\\d+)\\s*\\.\\s*(.*)$/);
-      if (match) {
-        const num = match[1];
-        const content = match[2].trim();
-        if (content) map.set(num, content);
-      }
-    }
-    return map;
-  }
-
-  function parseNumberedChoices(text) {
-    const lines = text.split(/\\r?\\n/);
-    const choicesMap = new Map();
-    let currentNum = null;
-    let currentChoices = [];
-    for (let line of lines) {
-      const numMatch = line.match(/^\\s*(\\d+)\\s*\\.\\s*(.*)$/);
-      if (numMatch) {
-        if (currentNum !== null) {
-          choicesMap.set(currentNum, currentChoices);
-        }
-        currentNum = numMatch[1];
-        currentChoices = [];
-        const firstChoice = numMatch[2].trim();
-        if (firstChoice) currentChoices.push(firstChoice);
-      } else {
-        const trimmed = line.trim();
-        if (trimmed) currentChoices.push(trimmed);
-      }
-    }
-    if (currentNum !== null) {
-      choicesMap.set(currentNum, currentChoices);
-    }
-    return choicesMap;
-  }
-
-</script>
-</body>
-</html>
-
+          question: qText
