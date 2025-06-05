@@ -127,14 +127,6 @@
     background: #16a085;
     box-shadow: 0 6px 16px rgba(22,160,133,0.7);
   }
-  #loadDefaultsBtn {
-    background: #48c774;
-    margin-top: 1rem;
-    width: 100%;
-  }
-  #loadDefaultsBtn:hover {
-    background: #3bfd6e;
-  }
   #log {
     font-family: monospace;
     font-size: 0.9rem;
@@ -161,8 +153,7 @@
   <label for="answersFileInput">Upload Key Answers File (.json, .pdf, .doc, .docx):</label>
   <input type="file" id="answersFileInput" accept=".json,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
 
-  <!-- New button to load default files -->
-  <button id="loadDefaultsBtn">Load Default Files</button>
+  <!-- Removed Load Default Files Button -->
 
   <!-- The existing Process Files button -->
   <button id="processFilesBtn" disabled>Process Files</button>
@@ -206,7 +197,6 @@
   const choicesFileInput = document.getElementById('choicesFileInput');
   const answersFileInput = document.getElementById('answersFileInput');
   const processFilesBtn = document.getElementById('processFilesBtn');
-  const loadDefaultsBtn = document.getElementById('loadDefaultsBtn');
   const materialStatus = document.getElementById('materialStatus');
   const logDiv = document.getElementById('log');
 
@@ -230,51 +220,7 @@
   choicesFileInput.addEventListener('change', checkFilesSelected);
   answersFileInput.addEventListener('change', checkFilesSelected);
 
-  // Fetch file from server and return a File object
-  async function fetchFileToFileObject(url, filename, mimeType) {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch file: ${filename} (status: ${response.status})`);
-    }
-    const blob = await response.blob();
-    return new File([blob], filename, { type: mimeType });
-  }
-
-  // Load default files and assign to inputs
-  async function loadDefaultFiles() {
-    loadDefaultsBtn.disabled = true;
-    materialStatus.textContent = 'Loading default files...';
-    log('Loading default files from server...');
-
-    try {
-      // File names and MIME types
-      const filesInfo = [
-        { name: '_Formatted Questions_.doc', input: questionsFileInput },
-        { name: '_Answer Key_.doc', input: answersFileInput },
-        { name: '_Multiple Choices_.doc', input: choicesFileInput },
-      ];
-      const mimeType = 'application/msword';
-
-      for (const fileInfo of filesInfo) {
-        const file = await fetchFileToFileObject(fileInfo.name, fileInfo.name, mimeType);
-        const dataTransfer = new DataTransfer();
-        dataTransfer.items.add(file);
-        fileInfo.input.files = dataTransfer.files;
-        log(`Loaded and assigned ${fileInfo.name}`);
-      }
-
-      checkFilesSelected();
-      materialStatus.textContent = 'Default files loaded. Ready to process.';
-    } catch (error) {
-      materialStatus.textContent = 'Error loading default files.';
-      alert(`Failed to load default files: ${error.message}`);
-      log(`Error loading default files: ${error.message}`);
-    } finally {
-      loadDefaultsBtn.disabled = false;
-    }
-  }
-
-  loadDefaultsBtn.addEventListener('click', loadDefaultFiles);
+  // Removed loadDefaultFiles and associated event listener
 
   // Placeholder for processFiles function
   processFilesBtn.addEventListener('click', () => {
