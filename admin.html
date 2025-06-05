@@ -284,37 +284,33 @@
     prepareTestBtn.disabled = !(questions.length > 0 && validTimer);
   }
 
-  // File reading and parsing code (reused from previous; not shown here for brevity)
-
+  // Helper to fetch file from URL and convert to File object
   async function fetchFileToFileObject(url, filename, mimeType) {
     const response = await fetch(url);
-    if (!response.ok) throw new Error(`Failed to fetch file: ${filename}`);
+    if (!response.ok) throw new Error(\`Failed to fetch file: \${filename}\`);
     const blob = await response.blob();
     return new File([blob], filename, { type: mimeType });
   }
 
+  // Load default files from relative files folder and assign to inputs
   async function loadDefaultFiles() {
     loadDefaultsBtn.disabled = true;
     materialStatus.textContent = 'Loading default files...';
     log('Loading default files from repository...');
 
     try {
-      const basePath = './files/';
+      const basePath = 'files/';
 
-      const questionFileName = '__Formatted Questions___.doc';
-      const choicesFileName = '__Multiple Choices___.docx';
-      const answersFileName = '__Answer Key___.docx';
+      const questionFileName = 'Formatted Questions_.doc';
+      const choicesFileName = 'Multiple Choices_.doc';
+      const answersFileName = 'Answer Key_.doc';
 
-      // MIME types for doc and docx
       const docMimeType = 'application/msword';
-      const docxMimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-      // Fetch files from same origin relative paths
       const questionFile = await fetchFileToFileObject(basePath + encodeURIComponent(questionFileName), questionFileName, docMimeType);
-      const choicesFile = await fetchFileToFileObject(basePath + encodeURIComponent(choicesFileName), choicesFileName, docxMimeType);
-      const answersFile = await fetchFileToFileObject(basePath + encodeURIComponent(answersFileName), answersFileName, docxMimeType);
+      const choicesFile = await fetchFileToFileObject(basePath + encodeURIComponent(choicesFileName), choicesFileName, docMimeType);
+      const answersFile = await fetchFileToFileObject(basePath + encodeURIComponent(answersFileName), answersFileName, docMimeType);
 
-      // Use DataTransfer objects to assign fetched files to inputs
       const questionDT = new DataTransfer();
       questionDT.items.add(questionFile);
       questionsFileInput.files = questionDT.files;
@@ -342,11 +338,219 @@
 
   loadDefaultsBtn.addEventListener('click', loadDefaultFiles);
 
-  // Initialize states on page load
-  processFilesBtn.disabled = true;
-  shuffleBtn.disabled = true;
-  prepareTestBtn.disabled = true;
-  linkContainer.style.display = 'none';
+  processFilesBtn.addEventListener('click', async () => {
+    await processFiles();
+  });
+
+  function shuffleQuestions() {
+    for(let i = questions.length -1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [questions[i], questions[j]] = [questions[j], questions[i]];
+    }
+    log('Questions shuffled.');
+  }
+
+  shuffleBtn.addEventListener('click', () => {
+    shuffleQuestions();
+    updatePrepareBtnState();
+  });
+
+  prepareTestBtn.addEventListener('click', () => {
+    if(questions.length === 0) {
+      alert('No questions loaded.');
+      return;
+    }
+    if(!validateTimerInputs()){
+      alert('Please set a valid timer (max 24 hrs, max 59 mins, cannot be 0).');
+      return;
+    }
+    const count = parseInt(questionCountInput.value);
+    if(!(count >=1 && count <= 1000)) {
+      alert('Number of questions must be between 1 and 1000.');
+      return;
+    }
+    const limitedQuestions = questions.slice(0, count);
+    const totalSeconds = parseInt(timerHours.value) * 3600 + parseInt(timerMinutes.value) * 60;
+    const testData = {
+      questions: limitedQuestions,
+      timeLimitSeconds: totalSeconds,
+      createdAt: Date.now()
+    };
+    try {
+      localStorage.setItem('preparedTestData', JSON.stringify(testData));
+      log('Test prepared and saved.');
+      const urlBase = location.origin + location.pathname.replace(/\/[^\/]*$/, '/');
+      const testerURL = urlBase + 'examinee.html';
+      generatedLinkInput.value = testerURL;
+      linkContainer.style.display = 'block';
+      alert('Test prepared successfully! Copy the shareable link below to distribute to examinees.');
+    } catch(e) {
+      alert('Failed to save test data: ' + e.message);
+      log('Error saving test: ' + e.message);
+    }
+  });
+
+  copyLinkBtn.addEventListener('click', () => {
+    generatedLinkInput.select();
+    document.execCommand('copy');
+    alert('Link copied to clipboard!');
+  });
+
+  toolsBtn.addEventListener('click', () => {
+    window.location.href = "Tools-front-page.html";
+  });
+
+  async function processFiles() {
+    processFilesBtn.disabled = true;
+    shuffleBtn.disabled = true;
+    prepareTestBtn.disabled = true;
+    materialStatus.textContent = 'Processing files...';
+    log('Processing the 3 uploaded files.');
+
+    try {
+      const questionsFile = questionsFileInput.files[0];
+      const choicesFile = choicesFileInput.files[0];
+      const answersFile = answersFileInput.files[0];
+
+      const questionsTextRaw = await extractTextFromFile(questionsFile);
+      const choicesTextRaw = await extractTextFromFile(choicesFile);
+      const answersTextRaw = await extractTextFromFile(answersFile);
+
+      const questionsMap = parseNumberedList(typeof questionsTextRaw === 'string' ? questionsTextRaw : JSON.stringify(questionsTextRaw));
+      const choicesMap = typeof choicesTextRaw === 'string' ? parseNumberedChoices(choicesTextRaw) : new Map();
+      const answersMap = parseNumberedList(typeof answersTextRaw === 'string' ? answersTextRaw : JSON.stringify(answersTextRaw));
+
+      if (questionsMap.size === 0) throw new Error('No valid questions found.');
+      if (choicesMap.size === 0) throw new Error('No valid choices found.');
+      if (answersMap.size === 0) throw new Error('No valid answers found.');
+
+      questions = [];
+      for (let [num, qText] of questionsMap) {
+        if (!choicesMap.has(num)) throw new Error(\`Choices missing for question number \${num}\`);
+        if (!answersMap.has(num)) throw new Error(\`Answer missing for question number \${num}\`);
+        const opts = choicesMap.get(num);
+        if (!Array.isArray(opts)) throw new Error(\`Choices for question \${num} must be an array.\`);
+        const ansRaw = answersMap.get(num);
+
+        let answerIndex = null;
+        if (/^\d+$/.test(ansRaw)) {
+          const idx = parseInt(ansRaw, 10);
+          if (idx < 0 || idx >= opts.length) throw new Error(\`Answer index out of range for question \${num}\`);
+          answerIndex = idx;
+        } else if (/^[A-Za-z]$/.test(ansRaw)) {
+          const idx = ansRaw.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
+          if (idx < 0 || idx >= opts.length) throw new Error(\`Answer letter out of range for question \${num}\`);
+          answerIndex = idx;
+        } else {
+          throw new Error(\`Unsupported answer format for question \${num}: "\${ansRaw}"\`);
+        }
+
+        questions.push({
+          question: qText,
+          options: opts,
+          answerIndex: answerIndex
+        });
+      }
+
+      if (questions.length === 0) throw new Error('No questions prepared after processing.');
+
+      materialStatus.textContent = \`Processed and prepared \${questions.length} questions.\`;
+      log(\`Processed \${questions.length} questions.\`);
+      shuffleBtn.disabled = false;
+      updatePrepareBtnState();
+    } catch (e) {
+      questions = [];
+      materialStatus.textContent = 'Error processing files.';
+      log('Error: ' + e.message);
+      alert('Failed to process files: ' + e.message);
+      shuffleBtn.disabled = true;
+      prepareTestBtn.disabled = true;
+    } finally {
+      processFilesBtn.disabled = false;
+    }
+  }
+
+  async function extractTextFromPDF(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map(item => item.str).join(' ');
+      fullText += pageText + '\\n';
+    }
+    return fullText;
+  }
+
+  async function extractTextFromDocx(file) {
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        mammoth.extractRawText({ arrayBuffer: event.target.result })
+          .then((result) => {
+            resolve(result.value);
+          })
+          .catch((err) => reject(new Error('Mammoth parsing error: ' + err.message)));
+      };
+      reader.onerror = () => reject(new Error('Failed to read file ' + file.name));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  async function extractTextFromFile(file) {
+    const fileName = file.name.toLowerCase();
+    if (fileName.endsWith('.pdf')) {
+      return await extractTextFromPDF(file);
+    } else if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) {
+      return await extractTextFromDocx(file);
+    } else if (fileName.endsWith('.json')) {
+      const text = await file.text();
+      return text;
+    } else {
+      throw new Error('Unsupported file type for ' + file.name);
+    }
+  }
+
+  function parseNumberedList(text) {
+    const lines = text.split(/\\r?\\n/);
+    const map = new Map();
+    for (let line of lines) {
+      const match = line.match(/^\\s*(\\d+)\\s*\\.\\s*(.*)$/);
+      if (match) {
+        const num = match[1];
+        const content = match[2].trim();
+        if (content) map.set(num, content);
+      }
+    }
+    return map;
+  }
+
+  function parseNumberedChoices(text) {
+    const lines = text.split(/\\r?\\n/);
+    const choicesMap = new Map();
+    let currentNum = null;
+    let currentChoices = [];
+    for (let line of lines) {
+      const numMatch = line.match(/^\\s*(\\d+)\\s*\\.\\s*(.*)$/);
+      if (numMatch) {
+        if (currentNum !== null) {
+          choicesMap.set(currentNum, currentChoices);
+        }
+        currentNum = numMatch[1];
+        currentChoices = [];
+        const firstChoice = numMatch[2].trim();
+        if (firstChoice) currentChoices.push(firstChoice);
+      } else {
+        const trimmed = line.trim();
+        if (trimmed) currentChoices.push(trimmed);
+      }
+    }
+    if (currentNum !== null) {
+      choicesMap.set(currentNum, currentChoices);
+    }
+    return choicesMap;
+  }
 
 </script>
 </body>
