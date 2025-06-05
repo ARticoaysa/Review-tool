@@ -249,7 +249,7 @@
   choicesFileInput.addEventListener('change', checkFilesSelected);
   answersFileInput.addEventListener('change', checkFilesSelected);
 
-  // Timer and question count validation functions (unchanged)
+  // Timer and question count validation functions
   questionCountInput.addEventListener('input', () => {
     let val = parseInt(questionCountInput.value);
     if (isNaN(val) || val < 1) val = 1;
@@ -284,7 +284,7 @@
     prepareTestBtn.disabled = !(questions.length > 0 && validTimer);
   }
 
-  // Helper to fetch file from URL and convert to File object
+  // Helper to fetch a file and convert to a File object
   async function fetchFileToFileObject(url, filename, mimeType) {
     try {
       const response = await fetch(url);
@@ -297,7 +297,7 @@
     }
   }
 
-  // Load default files from root folder and assign to inputs
+  // Load default files and assign them to the file inputs
   async function loadDefaultFiles() {
     loadDefaultsBtn.disabled = true;
     materialStatus.textContent = 'Loading default files...';
@@ -307,24 +307,25 @@
       const questionFileName = '_Formatted Questions_.docx';
       const choicesFileName = '_Multiple Choices_.docx';
       const answersFileName = '_Answer Key_.docx';
-
       const docxMimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
+      // Fetch the files
       const questionFile = await fetchFileToFileObject(encodeURIComponent(questionFileName), questionFileName, docxMimeType);
       const choicesFile = await fetchFileToFileObject(encodeURIComponent(choicesFileName), choicesFileName, docxMimeType);
       const answersFile = await fetchFileToFileObject(encodeURIComponent(answersFileName), answersFileName, docxMimeType);
 
+      // Assign files to inputs as per requested mapping
       const questionDT = new DataTransfer();
       questionDT.items.add(questionFile);
       questionsFileInput.files = questionDT.files;
 
-      const choicesDT = new DataTransfer();
-      choicesDT.items.add(choicesFile);
-      choicesFileInput.files = choicesDT.files;
-
       const answersDT = new DataTransfer();
       answersDT.items.add(answersFile);
       answersFileInput.files = answersDT.files;
+
+      const choicesDT = new DataTransfer();
+      choicesDT.items.add(choicesFile);
+      choicesFileInput.files = choicesDT.files;
 
       checkFilesSelected();
       materialStatus.textContent = 'Default files loaded. Ready to process.';
@@ -342,10 +343,11 @@
   loadDefaultsBtn.addEventListener('click', loadDefaultFiles);
 
   processFilesBtn.addEventListener('click', async () => {
+    // processFiles() should be implemented elsewhere in your codebase
     await processFiles();
   });
 
-  // ...rest of existing functions (processFiles, extractTextFromFile, shuffleQuestions etc.) remain unchanged...
+  // Your existing functions (processFiles, extractTextFromFile, etc.) would go here...
 
 </script>
 </body>
