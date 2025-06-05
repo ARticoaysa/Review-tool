@@ -200,44 +200,25 @@
   <div id="signature">by: Sweetgwapa</div>
 </main>
 
-<!-- PDF.js library -->
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.14.305/build/pdf.min.js"></script>
-<!-- Mammoth.js library for DOCX -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js"></script>
-
 <script>
   // Variables and element references
-  let questions = [];
-  let questionCount = 50;
-
   const questionsFileInput = document.getElementById('questionsFileInput');
   const choicesFileInput = document.getElementById('choicesFileInput');
   const answersFileInput = document.getElementById('answersFileInput');
-
   const processFilesBtn = document.getElementById('processFilesBtn');
-
-  const timerHours = document.getElementById('timerHours');
-  const timerMinutes = document.getElementById('timerMinutes');
-  const questionCountInput = document.getElementById('questionCountInput');
-  const shuffleBtn = document.getElementById('shuffleBtn');
-  const prepareTestBtn = document.getElementById('prepareTestBtn');
-  const materialStatus = document.getElementById('materialStatus');
-  const linkContainer = document.getElementById('linkContainer');
-  const generatedLinkInput = document.getElementById('generatedLink');
-  const copyLinkBtn = document.getElementById('copyLinkBtn');
-  const logDiv = document.getElementById('log');
-  const toolsBtn = document.getElementById('toolsBtn');
   const loadDefaultsBtn = document.getElementById('loadDefaultsBtn');
+  const materialStatus = document.getElementById('materialStatus');
+  const logDiv = document.getElementById('log');
 
-  // Helper logging function
-  function log(text){
+  // Log helper
+  function log(text) {
     const now = new Date().toLocaleTimeString();
     logDiv.textContent += `[${now}] ${text}\n`;
     logDiv.scrollTop = logDiv.scrollHeight;
   }
 
-  // Enable Process Files button if all three input files are selected
-  function checkFilesSelected(){
+  // Enable or disable Process Files button
+  function checkFilesSelected() {
     processFilesBtn.disabled = !(
       questionsFileInput.files.length === 1 &&
       choicesFileInput.files.length === 1 &&
@@ -249,92 +230,45 @@
   choicesFileInput.addEventListener('change', checkFilesSelected);
   answersFileInput.addEventListener('change', checkFilesSelected);
 
-  // Timer and question count validation functions
-  questionCountInput.addEventListener('input', () => {
-    let val = parseInt(questionCountInput.value);
-    if (isNaN(val) || val < 1) val = 1;
-    if (val > 1000) val = 1000;
-    questionCountInput.value = val;
-    questionCount = val;
-    updatePrepareBtnState();
-  });
-
-  function validateTimerInputs() {
-    let h = parseInt(timerHours.value);
-    let m = parseInt(timerMinutes.value);
-    if (isNaN(h) || h < 0 || h > 24) return false;
-    if (isNaN(m) || m < 0 || m > 59) return false;
-    if (h === 0 && m === 0) return false;
-    return true;
-  }
-
-  timerHours.addEventListener('input', () => {
-    if(parseInt(timerHours.value) > 24) timerHours.value = 24;
-    if(parseInt(timerHours.value) < 0) timerHours.value = 0;
-    updatePrepareBtnState();
-  });
-  timerMinutes.addEventListener('input', () => {
-    if(parseInt(timerMinutes.value) > 59) timerMinutes.value = 59;
-    if(parseInt(timerMinutes.value) < 0) timerMinutes.value = 0;
-    updatePrepareBtnState();
-  });
-
-  function updatePrepareBtnState(){
-    const validTimer = validateTimerInputs();
-    prepareTestBtn.disabled = !(questions.length > 0 && validTimer);
-  }
-
-  // Helper to fetch a file and convert to a File object
+  // Fetch file from server and return a File object
   async function fetchFileToFileObject(url, filename, mimeType) {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Failed to fetch file: ${filename} (Status: ${response.status})`);
-      const blob = await response.blob();
-      return new File([blob], filename, { type: mimeType });
-    } catch (error) {
-      console.error(`Error fetching file ${filename}:`, error);
-      throw error;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch file: ${filename} (status: ${response.status})`);
     }
+    const blob = await response.blob();
+    return new File([blob], filename, { type: mimeType });
   }
 
-  // Load default files and assign them to the file inputs
+  // Load default files and assign to inputs
   async function loadDefaultFiles() {
     loadDefaultsBtn.disabled = true;
     materialStatus.textContent = 'Loading default files...';
-    log('Loading default files from repository root folder...');
+    log('Loading default files from server...');
 
     try {
-      const questionFileName = '_Formatted Questions_.docx';
-      const choicesFileName = '_Multiple Choices_.docx';
-      const answersFileName = '_Answer Key_.docx';
-      const docxMimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      // File names and MIME types
+      const filesInfo = [
+        { name: '_Formatted Questions_.doc', input: questionsFileInput },
+        { name: '_Answer Key_.doc', input: answersFileInput },
+        { name: '_Multiple Choices_.doc', input: choicesFileInput },
+      ];
+      const mimeType = 'application/msword';
 
-      // Fetch the files
-      const questionFile = await fetchFileToFileObject(encodeURIComponent(questionFileName), questionFileName, docxMimeType);
-      const choicesFile = await fetchFileToFileObject(encodeURIComponent(choicesFileName), choicesFileName, docxMimeType);
-      const answersFile = await fetchFileToFileObject(encodeURIComponent(answersFileName), answersFileName, docxMimeType);
-
-      // Assign files to inputs as per requested mapping
-      const questionDT = new DataTransfer();
-      questionDT.items.add(questionFile);
-      questionsFileInput.files = questionDT.files;
-
-      const answersDT = new DataTransfer();
-      answersDT.items.add(answersFile);
-      answersFileInput.files = answersDT.files;
-
-      const choicesDT = new DataTransfer();
-      choicesDT.items.add(choicesFile);
-      choicesFileInput.files = choicesDT.files;
+      for (const fileInfo of filesInfo) {
+        const file = await fetchFileToFileObject(fileInfo.name, fileInfo.name, mimeType);
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        fileInfo.input.files = dataTransfer.files;
+        log(`Loaded and assigned ${fileInfo.name}`);
+      }
 
       checkFilesSelected();
       materialStatus.textContent = 'Default files loaded. Ready to process.';
-      log('Default files loaded into inputs.');
-
     } catch (error) {
       materialStatus.textContent = 'Error loading default files.';
-      log('Error loading default files: ' + error.message);
-      alert('Failed to load default files: ' + error.message);
+      alert(`Failed to load default files: ${error.message}`);
+      log(`Error loading default files: ${error.message}`);
     } finally {
       loadDefaultsBtn.disabled = false;
     }
@@ -342,13 +276,12 @@
 
   loadDefaultsBtn.addEventListener('click', loadDefaultFiles);
 
-  processFilesBtn.addEventListener('click', async () => {
-    // processFiles() should be implemented elsewhere in your codebase
-    await processFiles();
+  // Placeholder for processFiles function
+  processFilesBtn.addEventListener('click', () => {
+    alert('Process Files functionality not implemented in this demo.');
   });
-
-  // Your existing functions (processFiles, extractTextFromFile, etc.) would go here...
 
 </script>
 </body>
 </html>
+
